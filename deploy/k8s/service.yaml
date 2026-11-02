@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-agents
+  labels:
+    app.kubernetes.io/name: ai-agents
+spec:
+  # NodePort, like the Assistant (which uses 30080). The page has no login and can reset
+  # data and start agents, so keep it on your lab network; never expose it publicly.
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: ai-agents
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      nodePort: 30090

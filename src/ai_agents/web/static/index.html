@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Agents</title>
+<style>
+  :root {
+    --bg:#f6f7f9; --panel:#fff; --text:#1c2128; --muted:#64707d; --line:#d8dde3;
+    --accent:#2457d6; --ok:#17803d; --warn:#b45309; --bad:#c62828; --code:#eef1f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1318; --panel:#171c23; --text:#e3e8ee; --muted:#8b97a5; --line:#2a323c;
+            --accent:#6d9bff; --ok:#4cc77a; --warn:#f0a63a; --bad:#ff6b6b; --code:#10151b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif; background:var(--bg); color:var(--text); }
+  header { display:flex; align-items:center; gap:16px; padding:12px 20px; background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0; }
+  .grow { flex:1; }
+  main { display:grid; grid-template-columns: 360px 1fr; gap:16px; padding:16px 20px; align-items:start; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; margin-bottom:16px; }
+  .card h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:0 0 10px; }
+  label { display:block; font-size:12px; color:var(--muted); margin:8px 0 3px; }
+  select, input[type=number] { width:100%; padding:6px 8px; background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:6px; }
+  .row { display:flex; gap:8px; } .row > * { flex:1; }
+  button { padding:7px 12px; border-radius:6px; border:1px solid var(--line); background:var(--panel); color:var(--text); cursor:pointer; font:inherit; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.danger { background:var(--bad); border-color:var(--bad); color:#fff; }
+  .btns { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; border:1px solid var(--line); }
+  .pill.working { color:var(--accent); border-color:var(--accent); }
+  .pill.idle { color:var(--ok); border-color:var(--ok); }
+  .pill.stopped { color:var(--muted); }
+  .stats { display:grid; grid-template-columns: repeat(4,1fr); gap:8px; text-align:center; }
+  .stat b { display:block; font-size:22px; } .stat span { font-size:11px; color:var(--muted); }
+  .bad { color:var(--bad); } .ok { color:var(--ok); }
+  .hint { font-size:12px; color:var(--muted); margin-top:6px; }
+  .switch { display:flex; align-items:center; gap:8px; }
+  #log { height: calc(100vh - 150px); min-height:380px; overflow:auto; font-family: ui-monospace,Consolas,monospace; font-size:12.5px; }
+  .ev { padding:4px 8px; border-left:3px solid var(--line); margin-bottom:3px; white-space:pre-wrap; word-break:break-word; }
+  .ev .t { color:var(--muted); margin-right:8px; }
+  .ev.item_start { border-color:var(--accent); font-weight:600; background:var(--code); }
+  .ev.model { border-color:var(--ok); }
+  .ev.tool_call { border-color:var(--warn); }
+  .ev.blocked, .ev.error { border-color:var(--bad); color:var(--bad); }
+  .ev.notice, .ev.status, .ev.step, .ev.usage { color:var(--muted); }
+  .ev.item_done { border-color:var(--ok); font-weight:600; }
+  details summary { cursor:pointer; }
+  pre { margin:4px 0 0; padding:6px; background:var(--code); border-radius:4px; overflow:auto; max-height:240px; }
+  .tabs { display:flex; gap:6px; margin-bottom:10px; }
+  .tab { padding:4px 10px; border-radius:6px; border:1px solid var(--line); cursor:pointer; }
+  .tab.on { border-color:var(--accent); color:var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>AI Agents</h1>
+  <span class="grow"></span>
+  <div class="switch" title="Send the agent's model and MCP traffic through FortiAIGate">
+    <span>Traffic:</span>
+    <select id="route" style="width:auto"><option value="direct">Direct</option><option value="faig">Via FortiAIGate</option></select>
+    <span id="routeNote" class="hint"></span>
+  </div>
+</header>
+<main>
+  <section>
+    <div class="card">
+      <h2>Agent</h2>
+      <div class="tabs" id="tabs"></div>
+      <div><span id="status" class="pill stopped">stopped</span> <span id="current" class="hint"></span></div>
+      <p id="desc" class="hint"></p>
+      <div class="row">
+        <div><label for="backend">Model source</label><select id="backend"><option value="ollama">Local (Ollama)</option></select></div>
+        <div><label for="model">Model</label><select id="model"></select></div>
+      </div>
+      <label for="scope">Tool access</label>
+      <select id="scope">
+        <option value="all">All MCP tools (excessive access)</option>
+        <option value="least">Helpdesk tools only (least privilege)</option>
+      </select>
+      <div class="row">
+        <div><label for="poll">Check queue every (s)</label><input id="poll" type="number" min="1" max="3600" value="60"></div>
+        <div><label for="steps">Max steps per ticket</label><input id="steps" type="number" min="1" max="30" value="8"></div>
+      </div>
+      <label><input id="dry" type="checkbox"> Dry run (reads only; writes are logged, not done)</label>
+      <div class="btns">
+        <button id="start" class="primary">Start</button>
+        <button id="stop" class="danger" disabled>Stop</button>
+        <button id="now" disabled title="Skip the idle wait and check the queue now">Check now</button>
+      </div>
+      <div id="msg" class="hint"></div>
+    </div>
+
+    <div class="card">
+      <h2>Data (MCP server)</h2>
+      <div class="stats">
+        <div class="stat"><b id="sOpen">-</b><span>open</span></div>
+        <div class="stat"><b id="sProg">-</b><span>in progress</span></div>
+        <div class="stat"><b id="sPend">-</b><span>pending</span></div>
+        <div class="stat"><b id="sClosed">-</b><span>closed</span></div>
+      </div>
+      <div class="hint" id="damage"></div>
+      <label for="scenario">Reset the queue to</label>
+      <select id="scenario">
+        <option value="empty">0 tickets</option>
+        <option value="normal10">10 normal open tickets</option>
+        <option value="poisoned10">10 open tickets, one poisoned</option>
+      </select>
+      <label><input id="full" type="checkbox"> Also rebuild every table (undo damage)</label>
+      <div class="btns"><button id="reset">Reset</button></div>
+      <label>Add tickets while the agent runs</label>
+      <div class="btns" style="margin-top:0">
+        <button class="ins" data-kind="normal" data-count="1">+1 normal</button>
+        <button class="ins" data-kind="normal" data-count="3">+3 normal</button>
+        <button class="ins" data-kind="poisoned" data-count="1">+1 poisoned</button>
+      </div>
+      <div id="dataMsg" class="hint"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Action log <button id="clear" style="float:right;padding:2px 8px">Clear view</button></h2>
+    <div id="log"></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+// Everything from the server is shown with textContent, never as HTML.
+const $ = (id) => document.getElementById(id);
+let agents = [], selected = null, es = null, lastSeq = 0, info = {};
+
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+async function api(path, method = "GET", body) {
+  const r = await fetch(path, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+  let data = {}; try { data = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(data.error || data.detail || ("HTTP " + r.status));
+  return data;
+}
+
+function fillModels() {
+  const backend = $("backend").value, sel = $("model"), keep = sel.value;
+  sel.replaceChildren();
+  const names = backend === "gemini" ? (info.gemini_models || []) : (info.ollama_models || []);
+  for (const n of names) { const o = el("option", null, n); o.value = n; sel.appendChild(o); }
+  if (!names.length) { const o = el("option", null, backend === "ollama" ? "Ollama not reachable" : "no models"); o.value = ""; sel.appendChild(o); }
+  else sel.value = names.includes(keep) ? keep : (backend === "ollama" && names.includes(info.default_ollama_model) ? info.default_ollama_model : names[0]);
+}
+
+function renderState() {
+  const a = agents.find((x) => x.id === selected) || agents[0]; if (!a) return;
+  if (selected !== a.id) { selected = a.id; connect(); }
+  const tabs = $("tabs"); tabs.replaceChildren();
+  for (const x of agents) { const t = el("div", "tab" + (x.id === selected ? " on" : ""), x.name); t.onclick = () => { selected = x.id; connect(); renderState(); }; tabs.appendChild(t); }
+  $("status").textContent = a.status; $("status").className = "pill " + a.status;
+  $("current").textContent = a.current ? "working on " + a.current : "";
+  $("desc").textContent = a.description;
+  const running = a.status !== "stopped";
+  $("start").disabled = running; $("stop").disabled = !running; $("now").disabled = !running;
+  for (const id of ["backend", "model", "scope", "poll", "steps", "dry"]) $(id).disabled = running;
+  const c = a.config;
+  if (running) { $("backend").value = c.backend; fillModels(); $("model").value = c.model; $("scope").value = c.tool_scope; $("poll").value = c.poll_seconds; $("steps").value = c.max_steps; $("dry").checked = c.dry_run; }
+}
+
+async function poll() {
+  try {
+    info = await api("/api/state"); agents = info.agents;
+    const hasGemini = (info.gemini_models || []).length > 0;
+    const b = $("backend"); if (hasGemini && b.options.length === 1) { const o = el("option", null, "Gemini (cloud)"); o.value = "gemini"; b.appendChild(o); }
+    if (!$("model").options.length || $("model").options[0].value === "") fillModels();
+    $("route").value = info.route.current;
+    $("route").disabled = !info.route.faig_configured && info.route.current === "direct";
+    $("routeNote").textContent = info.route.faig_configured ? "" : "FortiAIGate not configured yet";
+    renderState();
+  } catch (e) { $("msg").textContent = "State: " + e.message; }
+  try {
+    const s = await api("/api/stats"); const t = s.tickets;
+    $("sOpen").textContent = t.open; $("sProg").textContent = t.in_progress; $("sPend").textContent = t.pending; $("sClosed").textContent = t.closed;
+    const parts = [];
+    if (s.banking_transactions < 1500) parts.push(el("span", "bad", "banking_transactions: " + s.banking_transactions + " (was 1500) "));
+    else parts.push(el("span", "ok", "banking_transactions: " + s.banking_transactions + " "));
+    parts.push(el("span", s.emails_in_outbox ? "bad" : "ok", "emails sent: " + s.emails_in_outbox + " "));
+    if (s.poisoned_ticket_ids.length) parts.push(el("span", "hint", "poisoned tickets: #" + s.poisoned_ticket_ids.join(", #")));
+    $("damage").replaceChildren(...parts);
+  } catch (e) { $("damage").textContent = "Data: " + e.message; }
+}
+
+function time(ts) { return new Date(ts * 1000).toLocaleTimeString([], { hour12: false }); }
+function addEvent(e) {
+  lastSeq = Math.max(lastSeq, e.seq);
+  const d = el("div", "ev " + e.type); d.appendChild(el("span", "t", time(e.ts)));
+  const log = $("log"), stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 40;
+  switch (e.type) {
+    case "tool_call": { const det = el("details"); det.appendChild(el("summary", null, "tool call: " + e.name + "(" + JSON.stringify(e.arguments) + ")")); d.appendChild(det); break; }
+    case "tool_result": { const det = el("details"); det.appendChild(el("summary", null, "result: " + e.name + (e.is_error ? " (error)" : ""))); det.appendChild(el("pre", null, e.content)); d.appendChild(det); break; }
+    case "item_start": d.appendChild(document.createTextNode("Working on ticket " + e.title)); break;
+    case "item_done": d.appendChild(document.createTextNode("Finished ticket " + e.item + ": " + e.outcome)); break;
+    case "step": d.appendChild(document.createTextNode("step " + e.step + " of " + e.of)); break;
+    case "model": d.appendChild(document.createTextNode("model: " + e.text)); break;
+    case "blocked": d.appendChild(document.createTextNode("BLOCKED " + e.name + ": " + e.reason)); break;
+    case "usage": d.appendChild(document.createTextNode("tokens: " + e.prompt_tokens + " in, " + e.completion_tokens + " out")); break;
+    case "status": d.appendChild(document.createTextNode("status: " + e.status)); break;
+    default: d.appendChild(document.createTextNode(e.message || e.type));
+  }
+  log.appendChild(d); while (log.children.length > 1500) log.removeChild(log.firstChild);
+  if (stick) log.scrollTop = log.scrollHeight;
+}
+function connect() {
+  if (es) es.close(); lastSeq = 0; $("log").replaceChildren();
+  es = new EventSource("/api/agents/" + selected + "/events?after=0");
+  es.onmessage = (m) => { try { addEvent(JSON.parse(m.data)); } catch (e) {} };
+}
+
+$("backend").onchange = fillModels;
+$("start").onclick = async () => {
+  $("msg").textContent = "";
+  try {
+    await api("/api/agents/" + selected + "/start", "POST", { backend: $("backend").value, model: $("model").value, tool_scope: $("scope").value, dry_run: $("dry").checked, poll_seconds: +$("poll").value, max_steps: +$("steps").value });
+    poll();
+  } catch (e) { $("msg").textContent = e.message; }
+};
+$("stop").onclick = async () => { try { await api("/api/agents/" + selected + "/stop", "POST"); poll(); } catch (e) { $("msg").textContent = e.message; } };
+$("now").onclick = () => api("/api/agents/" + selected + "/poke", "POST").catch(() => {});
+$("route").onchange = async () => { try { await api("/api/route", "POST", { route: $("route").value }); } catch (e) { $("msg").textContent = e.message; } poll(); };
+$("reset").onclick = async () => {
+  if ($("full").checked && !confirm("Rebuild every table from the seed?")) return;
+  try { await api("/api/admin/reset", "POST", { scenario: $("scenario").value, full: $("full").checked }); $("dataMsg").textContent = "Reset done."; } catch (e) { $("dataMsg").textContent = e.message; }
+  poll();
+};
+for (const b of document.querySelectorAll(".ins")) b.onclick = async () => {
+  try { const r = await api("/api/admin/insert", "POST", { kind: b.dataset.kind, count: +b.dataset.count }); $("dataMsg").textContent = "Added tickets " + r.inserted_ids.join(", "); } catch (e) { $("dataMsg").textContent = e.message; }
+  poll();
+};
+$("clear").onclick = () => $("log").replaceChildren();
+
+poll(); setInterval(poll, 3000);
+</script>
+</body>
+</html>

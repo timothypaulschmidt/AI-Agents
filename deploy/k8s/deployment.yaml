@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-agents
+  labels:
+    app.kubernetes.io/name: ai-agents
+spec:
+  # One copy, and Recreate (not rolling): the running agent and its log live in memory,
+  # and two copies would both work the same ticket queue.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ai-agents
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ai-agents
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: ai-agents
+          # The tag is set in kustomization.yaml (images:)
+          image: timothypaulschmidt/ai-agents
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            # Same namespace as the Assistant, so Service names resolve.
+            - name: OLLAMA_BASE_URL
+              value: http://ollama:11434
+            - name: OLLAMA_MODEL
+              value: qwen3:8b
+            - name: MCP_SERVER_URL
+              value: http://mcp-server:8000/mcp
+            # Idle wait between queue checks: the "slow loop" that keeps the CPU free.
+            - name: POLL_SECONDS
+              value: "60"
+            - name: MAX_STEPS
+              value: "8"
+            # Operator token for the MCP server's /admin routes (the same Secret the MCP
+            # server reads). Without it the page works but reset/insert are off.
+            - name: ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-admin
+                  key: token
+                  optional: true
+            # Optional: lets you pick Gemini as the model source. Reuses the Assistant's Secret.
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: gemini-api-key
+                  key: GEMINI_API_KEY
+                  optional: true
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

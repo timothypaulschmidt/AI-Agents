@@ -1,0 +1,15 @@
+# Apply with:  kubectl apply -k deploy/k8s
+# Goes into the same namespace as the AI Assistant, the Ollama pod and the MCP server.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ai-assistant
+
+resources:
+  - deployment.yaml
+  - service.yaml
+
+# To deploy a new version: push the image to Docker Hub, change newTag, apply again.
+images:
+  - name: timothypaulschmidt/ai-agents
+    newTag: v0.1.0
