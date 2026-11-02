@@ -54,8 +54,8 @@ Whether a model obeys the poisoned ticket depends on the model: small local mode
 ## Deploy to k3s
 
 ```powershell
-docker build -t timothypaulschmidt/ai-agents:v0.1.0 .
-docker push timothypaulschmidt/ai-agents:v0.1.0
+docker build -t timothypaulschmidt/ai-agents:v0.1.1 .
+docker push timothypaulschmidt/ai-agents:v0.1.1
 ssh administrator@k3s-qa.fortinetlabs.com "mkdir -p ~/deploy"
 scp -r deploy administrator@k3s-qa.fortinetlabs.com:~/deploy/ai-agents
 ```

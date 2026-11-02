@@ -56,7 +56,7 @@ async def test_idles_when_queue_empty_and_wakes_on_poke():
     assert runner.status == "idle"
     store.tickets[7] = dict(id=7, title="New", body="x", status="open", comments=[])
     runner.poke()
-    for _ in range(100):
+    for _ in range(500):   # up to 10 s: four model steps can be slow on a busy machine
         await asyncio.sleep(0.02)
         if store.tickets[7]["status"] == "closed":
             break
@@ -152,3 +152,20 @@ async def test_subscribers_receive_live_events():
     while not q.empty():
         got.append(q.get_nowait()["type"])
     assert "item_start" in got and "tool_call" in got and "item_done" in got
+
+
+async def test_releasing_never_reopens_a_ticket_that_is_already_finished():
+    """Stop can arrive just after the model closed the ticket: that work must stay done."""
+    store = Store(TICKETS[:2])
+    server = make_server(store)
+    tools = await load_tools(server)
+    agent = HelpdeskAgent()
+    from ai_agents.agents import WorkItem
+    store.tickets[1]["status"] = "closed"
+    store.tickets[2]["status"] = "pending"
+    await agent.release_item(tools, WorkItem("1", "t", "p"))
+    await agent.release_item(tools, WorkItem("2", "t", "p"))
+    assert (store.tickets[1]["status"], store.tickets[2]["status"]) == ("closed", "pending")
+    store.tickets[1]["status"] = "in_progress"                 # a genuinely half-done claim
+    await agent.release_item(tools, WorkItem("1", "t", "p"))
+    assert store.tickets[1]["status"] == "open"

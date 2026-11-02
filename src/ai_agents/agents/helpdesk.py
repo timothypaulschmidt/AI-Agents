@@ -60,4 +60,8 @@ class HelpdeskAgent(Agent):
         return f"ticket is now {status}"
 
     async def release_item(self, tools: McpTools, item: WorkItem) -> None:
-        await tools.call_data("update_ticket_status", {"ticket_id": int(item.id), "status": "open"})
+        # Only undo our own claim. If the model already closed or escalated the ticket
+        # before the stop arrived, putting it back to "open" would undo finished work.
+        ticket = await tools.call_data("get_ticket", {"ticket_id": int(item.id)})
+        if isinstance(ticket, dict) and ticket.get("status") == "in_progress":
+            await tools.call_data("update_ticket_status", {"ticket_id": int(item.id), "status": "open"})

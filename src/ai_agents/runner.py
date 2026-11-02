@@ -164,6 +164,10 @@ class AgentRunner:
     async def _main(self) -> None:
         try:
             while True:
+                # Clear the wake-up flag *before* looking at the queue. A "check now" (or an
+                # inserted ticket) that arrives while we are looking then stays set, so the
+                # wait below returns at once instead of sleeping through it.
+                self._poke.clear()
                 try:
                     worked = await self._cycle()
                 except (McpError, ProviderError, httpx.HTTPError) as exc:
@@ -172,7 +176,6 @@ class AgentRunner:
                 if worked:
                     continue  # more work may be waiting: check again straight away
                 self._set_status("idle")
-                self._poke.clear()
                 try:
                     await asyncio.wait_for(self._poke.wait(), self.config.poll_seconds)
                 except asyncio.TimeoutError:
