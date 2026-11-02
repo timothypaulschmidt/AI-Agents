@@ -68,7 +68,14 @@ kubectl -n ai-assistant get pods -l app.kubernetes.io/name=ai-agents
 kubectl -n ai-assistant logs -f deploy/ai-agents      # the same action log as the page
 ```
 
-Page: `http://k3s-qa.fortinetlabs.com:30090`. It has no login and can reset data and run agents: keep it on the lab network.
+Page URLs (both are NodePort 30090, plain HTTP for now):
+
+| Environment | URL |
+|---|---|
+| QA | http://agents-qa.fortinetlabs.com:30090 |
+| Production | http://agents.fortinetlabs.com:30090 |
+
+The page has no login and can reset data and run agents. In QA that is fine on the lab network. In **production (AWS)** limit port 30090 in the security group to your own IP, or use an SSH tunnel, until a login is added.
 
 ## Design notes
 
