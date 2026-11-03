@@ -51,19 +51,46 @@ def test_state_lists_agent_models_and_route():
         s = c.get("/api/state").json()
     assert s["agents"][0]["id"] == "helpdesk"
     assert s["ollama_models"] == ["fake", "other"]
-    assert s["route"] == {"current": "direct", "faig_configured": False}
+    assert s["route"] == {"current": "direct", "label": "Direct", "model_configured": False,
+                          "all_configured": False, "faig_configured": False}
     assert s["gemini_models"] == ["g"] and s["admin_enabled"] is True
 
 
-def test_faig_switch_is_refused_until_configured():
+def test_faig_routes_are_refused_until_configured():
     c, _ = make_client()
     with c:
-        assert c.post("/api/route", json={"route": "faig"}).status_code == 400
+        assert c.post("/api/route", json={"route": "faig_model"}).status_code == 400
+        assert c.post("/api/route", json={"route": "faig_all"}).status_code == 400
+        assert c.post("/api/route", json={"route": "faig"}).status_code == 400   # old name
         assert c.post("/api/route", json={"route": "direct"}).status_code == 200
+
+
+def test_model_only_route_needs_just_the_model_address():
+    c, _ = make_client(settings(faig_ollama_base_url="http://faig/ollama"))
+    with c:
+        assert c.post("/api/route", json={"route": "faig_model"}).json()["route"] == "faig_model"
+        st = c.get("/api/state").json()["route"]
+        assert st["current"] == "faig_model" and st["label"] == "Model via FortiAIGate"
+        assert c.post("/api/route", json={"route": "faig_all"}).status_code == 400   # MCP address still empty
+        assert "FAIG_MCP_SERVER_URL" in c.post("/api/route", json={"route": "faig_all"}).json()["detail"]
+
+
+def test_model_and_mcp_route():
     c, _ = make_client(settings(faig_ollama_base_url="http://faig/ollama", faig_mcp_url="http://faig/mcp"))
     with c:
-        assert c.post("/api/route", json={"route": "faig"}).json() == {"route": "faig"}
-        assert c.get("/api/state").json()["route"]["current"] == "faig"
+        assert c.post("/api/route", json={"route": "faig_all"}).json()["route"] == "faig_all"
+        assert c.post("/api/route", json={"route": "faig"}).json()["route"] == "faig_all"   # old name still works
+        assert c.get("/api/state").json()["route"]["current"] == "faig_all"
+        assert c.post("/api/route", json={"route": "direct"}).json()["route"] == "direct"
+
+
+def test_endpoints_per_route():
+    st = settings(faig_ollama_base_url="http://faig/ollama", faig_gemini_base_url="http://faig/gemini",
+                  faig_mcp_url="http://faig/mcp")
+    assert st.endpoints("direct").mcp_url == "http://mcp.test/mcp"
+    assert st.endpoints("faig_model").ollama_base_url == "http://faig/ollama"
+    assert st.endpoints("faig_model").mcp_url == "http://mcp.test/mcp"        # MCP stays direct
+    assert st.endpoints("faig_all").mcp_url == "http://faig/mcp"
 
 
 def test_start_work_and_stop():

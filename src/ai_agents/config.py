@@ -1,15 +1,28 @@
 """Settings, read from environment variables (same image on Windows, Docker and k3s).
 
 Two sets of endpoints exist on purpose: DIRECT (the model and the MCP server) and FAIG
-(the same things reached through FortiAIGate). A single switch picks which set the
-agents use. FAIG endpoints stay empty until FortiAIGate is configured, and the switch
-stays disabled until then.
+(the same things reached through FortiAIGate). The route picks which are used:
+
+  direct      model and MCP both direct
+  faig_model  the model goes through FortiAIGate, MCP stays direct
+  faig_all    the model and the MCP traffic both go through FortiAIGate
+
+FAIG endpoints stay empty until FortiAIGate is configured; a route that needs an empty
+one is refused. The route is held in memory, so a restart goes back to direct.
 """
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
 from urllib.parse import urlsplit
+
+
+ROUTES = ("direct", "faig_model", "faig_all")
+ROUTE_LABELS = {
+    "direct": "Direct",
+    "faig_model": "Model via FortiAIGate",
+    "faig_all": "Model + MCP via FortiAIGate",
+}
 
 
 def parse_list(raw: str) -> tuple[str, ...]:
@@ -46,12 +59,31 @@ class Settings:
     allow_parallel: bool
 
     @property
-    def faig_configured(self) -> bool:
-        return bool(self.faig_mcp_url and self.faig_ollama_base_url)
+    def faig_model_configured(self) -> bool:
+        return bool(self.faig_ollama_base_url)
+
+    @property
+    def faig_all_configured(self) -> bool:
+        return bool(self.faig_ollama_base_url and self.faig_mcp_url)
+
+    @property
+    def faig_configured(self) -> bool:  # kept for older callers: everything needed for faig_all
+        return self.faig_all_configured
+
+    def route_problem(self, route: str) -> str:
+        """Empty when the route can be used; otherwise what is missing."""
+        if route == "faig_model" and not self.faig_model_configured:
+            return "FortiAIGate is not configured for the model yet (FAIG_OLLAMA_BASE_URL is empty)."
+        if route == "faig_all" and not self.faig_all_configured:
+            missing = [n for n, v in (("FAIG_OLLAMA_BASE_URL", self.faig_ollama_base_url),
+                                      ("FAIG_MCP_SERVER_URL", self.faig_mcp_url)) if not v]
+            return "FortiAIGate is not configured yet (empty: " + ", ".join(missing) + ")."
+        return ""
 
     def endpoints(self, route: str) -> Endpoints:
-        if route == "faig":
-            return Endpoints(self.faig_ollama_base_url, self.faig_gemini_base_url, self.faig_mcp_url)
+        if route in ("faig_model", "faig_all"):
+            mcp = self.faig_mcp_url if route == "faig_all" else self.mcp_url
+            return Endpoints(self.faig_ollama_base_url, self.faig_gemini_base_url, mcp)
         return Endpoints(self.ollama_base_url, self.gemini_base_url, self.mcp_url)
 
     @property
