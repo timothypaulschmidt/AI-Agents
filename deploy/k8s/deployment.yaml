@@ -37,6 +37,9 @@ spec:
               value: qwen3:8b
             - name: MCP_SERVER_URL
               value: http://mcp-server:8000/mcp
+            # FortiAIGate addresses go here (or in an overlay) once FortiAIGate is configured:
+            #   FAIG_OLLAMA_BASE_URL  FAIG_GEMINI_BASE_URL  FAIG_MCP_SERVER_URL
+            # Until they are set, the Traffic route stays Direct.
             # Idle wait between queue checks: the "slow loop" that keeps the CPU free.
             - name: POLL_SECONDS
               value: "60"

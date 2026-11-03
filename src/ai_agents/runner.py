@@ -154,6 +154,9 @@ class AgentRunner:
     def _provider(self, route: str) -> OpenAICompatProvider:
         ep = self.settings.endpoints(route)
         if self.config.backend == "gemini":
+            if not ep.gemini_base_url:
+                raise ProviderError("Gemini has no FortiAIGate address on this route (FAIG_GEMINI_BASE_URL is empty). "
+                                   "Use a local model, or switch Traffic back to Direct.")
             return OpenAICompatProvider("gemini", self.client,
                                         ep.gemini_base_url.rstrip("/") + "/chat/completions",
                                         self.config.model, self.settings.gemini_api_key)

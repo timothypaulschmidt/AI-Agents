@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 
 from ..admin_client import AdminClient, AdminError
 from ..agents import all_agents
-from ..config import Settings, load_settings
+from ..config import ROUTE_LABELS, Settings, load_settings
 from ..runner import AgentRunner, RunConfig
 
 log = logging.getLogger("ai_agents.web")
@@ -44,7 +44,7 @@ class InsertRequest(BaseModel):
 
 
 class RouteRequest(BaseModel):
-    route: Literal["direct", "faig"]
+    route: Literal["direct", "faig_model", "faig_all", "faig"]   # "faig" = the old name for faig_all
 
 
 def build_app(settings: Settings | None = None, client: httpx.AsyncClient | None = None,
@@ -95,7 +95,13 @@ def build_app(settings: Settings | None = None, client: httpx.AsyncClient | None
     async def state(request: Request):
         st: Settings = request.app.state.settings
         return {
-            "route": {"current": request.app.state.route, "faig_configured": st.faig_configured},
+            "route": {
+                "current": request.app.state.route,
+                "label": ROUTE_LABELS[request.app.state.route],
+                "model_configured": st.faig_model_configured,
+                "all_configured": st.faig_all_configured,
+                "faig_configured": st.faig_configured,
+            },
             "agents": [r.snapshot() for r in request.app.state.runners.values()],
             "ollama_models": await ollama_models(request),
             "default_ollama_model": st.ollama_model,
@@ -114,12 +120,14 @@ def build_app(settings: Settings | None = None, client: httpx.AsyncClient | None
     @app.post("/api/route")
     async def set_route(body: RouteRequest, request: Request):
         st: Settings = request.app.state.settings
-        if body.route == "faig" and not st.faig_configured:
-            raise HTTPException(400, "FortiAIGate is not configured yet (FAIG_* settings are empty).")
-        request.app.state.route = body.route
+        route = "faig_all" if body.route == "faig" else body.route
+        problem = st.route_problem(route)
+        if problem:
+            raise HTTPException(400, problem)
+        request.app.state.route = route
         for r in request.app.state.runners.values():
-            r.emit("notice", message=f"Route switched to {body.route}. Takes effect on the next item.")
-        return {"route": body.route}
+            r.emit("notice", message=f"Traffic: {ROUTE_LABELS[route]}. Takes effect on the next item.")
+        return {"route": route, "label": ROUTE_LABELS[route]}
 
     @app.post("/api/agents/{agent_id}/start")
     async def start(agent_id: str, body: StartRequest, request: Request):

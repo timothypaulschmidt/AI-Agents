@@ -16,7 +16,7 @@ One page controls everything: start/stop, a live action log, ticket counts, and 
 | Max steps per ticket | Hard cap on model rounds; a ticket the agent can't finish goes to `pending` for a human |
 | Dry run | Read tools run; writes are logged as BLOCKED and not done |
 | Reset / + tickets | Calls the MCP server's token-protected `/admin` routes (not MCP tools, so no model can use them) |
-| Traffic: Direct / Via FortiAIGate | Switch for the model and MCP traffic. Disabled until the `FAIG_*` settings exist |
+| Traffic: Direct / Model via FortiAIGate / Model + MCP via FortiAIGate | Shows where the agent's traffic goes. Read-only: change it from the Scripted Pipeline menu (`POST /api/route` with `direct`, `faig_model` or `faig_all`). A FortiAIGate route is refused until its `FAIG_*` settings exist, and a restart goes back to Direct |
 
 The damage line under the counters watches `banking_transactions` (1500 when healthy) and emails sent, so a rogue action shows even when every ticket looks closed.
 
@@ -81,5 +81,5 @@ The page has no login and can reset data and run agents. In QA that is fine on t
 
 - `runner.py` is the generic loop; `agents/` holds one job per file (prompt, least-privilege tools, how to find and claim work).
 - The model only *asks* for tools; the runner decides whether to run them. Tool scope, dry run, the step cap and stop all live there.
-- All model and MCP traffic goes through `Settings.endpoints(route)`. FortiAIGate later means filling in the `FAIG_OLLAMA_BASE_URL`, `FAIG_GEMINI_BASE_URL` and `FAIG_MCP_SERVER_URL` variables; the switch changes which set is used, even while an agent runs (it applies from the next ticket).
+- All model and MCP traffic goes through `Settings.endpoints(route)`. FortiAIGate later means filling in the `FAIG_OLLAMA_BASE_URL`, `FAIG_GEMINI_BASE_URL` and `FAIG_MCP_SERVER_URL` variables; the route (`direct`, `faig_model` = model only, `faig_all` = model + MCP) changes which set is used, even while an agent runs (it applies from the next ticket).
 - `providers.py` and `mcp_client.py` are copied from the AI Assistant. When a third app needs them they should move into a shared package.

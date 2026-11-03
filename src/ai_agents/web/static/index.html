@@ -63,10 +63,9 @@
 <header>
   <h1>AI Agents</h1>
   <span class="grow"></span>
-  <div class="switch" title="Send the agent's model and MCP traffic through FortiAIGate">
+  <div class="switch" title="Where this agent's model and MCP traffic goes. It is changed from the Scripted Pipeline menu, not here.">
     <span>Traffic:</span>
-    <select id="route" style="width:auto"><option value="direct">Direct</option><option value="faig">Via FortiAIGate</option></select>
-    <span id="routeNote" class="hint"></span>
+    <span id="routeLabel" class="pill idle">Direct</span>
   </div>
 </header>
 <main>
@@ -182,9 +181,8 @@ async function poll() {
     const hasGemini = (info.gemini_models || []).length > 0;
     const b = $("backend"); if (hasGemini && b.options.length === 1) { const o = el("option", null, "Gemini (cloud)"); o.value = "gemini"; b.appendChild(o); }
     if (!$("model").options.length || $("model").options[0].value === "") fillModels();
-    $("route").value = info.route.current;
-    $("route").disabled = !info.route.faig_configured && info.route.current === "direct";
-    $("routeNote").textContent = info.route.faig_configured ? "" : "FortiAIGate not configured yet";
+    $("routeLabel").textContent = info.route.label;
+    $("routeLabel").className = "pill " + (info.route.current === "direct" ? "idle" : "working");
     renderState();
   } catch (e) { $("msg").textContent = "State: " + e.message; }
   try {
@@ -236,7 +234,6 @@ $("start").onclick = async () => {
 };
 $("stop").onclick = async () => { try { await api("/api/agents/" + selected + "/stop", "POST"); poll(); } catch (e) { $("msg").textContent = e.message; } };
 $("now").onclick = () => api("/api/agents/" + selected + "/poke", "POST").catch(() => {});
-$("route").onchange = async () => { try { await api("/api/route", "POST", { route: $("route").value }); } catch (e) { $("msg").textContent = e.message; } poll(); };
 $("reset").onclick = async () => {
   if ($("full").checked && !confirm("Rebuild every table from the seed?")) return;
   try { await api("/api/admin/reset", "POST", { scenario: $("scenario").value, full: $("full").checked }); $("dataMsg").textContent = "Reset done."; } catch (e) { $("dataMsg").textContent = e.message; }
