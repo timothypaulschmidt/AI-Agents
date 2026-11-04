@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
@@ -95,6 +96,7 @@ def build_app(settings: Settings | None = None, client: httpx.AsyncClient | None
     async def state(request: Request):
         st: Settings = request.app.state.settings
         return {
+            "version": os.environ.get("APP_VERSION", "dev"),   # set at image build time; "dev" when run from source
             "route": {
                 "current": request.app.state.route,
                 "label": ROUTE_LABELS[request.app.state.route],

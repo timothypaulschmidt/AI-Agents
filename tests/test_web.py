@@ -146,3 +146,14 @@ def test_index_page_is_served():
     with c:
         r = c.get("/")
     assert r.status_code == 200 and "Action log" in r.text
+
+
+def test_state_reports_the_release_version(monkeypatch):
+    monkeypatch.setenv("APP_VERSION", "v9.9.9")
+    c, _ = make_client()
+    with c:
+        assert c.get("/api/state").json()["version"] == "v9.9.9"
+    monkeypatch.delenv("APP_VERSION")
+    c, _ = make_client()
+    with c:
+        assert c.get("/api/state").json()["version"] == "dev"
