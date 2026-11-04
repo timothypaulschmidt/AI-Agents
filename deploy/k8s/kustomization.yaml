@@ -12,4 +12,4 @@ resources:
 # To deploy a new version: push the image to Docker Hub, change newTag, apply again.
 images:
   - name: timothypaulschmidt/ai-agents
-    newTag: v0.2.0
+    newTag: v0.2.1
