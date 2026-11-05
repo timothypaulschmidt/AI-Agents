@@ -54,7 +54,7 @@ spec:
             - name: FAIG_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: faig-api-key
+                  name: faig-agents-api-key
                   key: FAIG_API_KEY
                   optional: true
             # Idle wait between queue checks: the "slow loop" that keeps the CPU free.
