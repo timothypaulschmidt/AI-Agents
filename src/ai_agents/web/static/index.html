@@ -62,6 +62,7 @@
 <body>
 <header>
   <h1>AI Agents</h1>
+  <span id="appVersion" style="font-size:.75rem;color:var(--muted)"></span>
   <span class="grow"></span>
   <div class="switch" title="Where this agent's model and MCP traffic goes. It is changed from the Scripted Pipeline menu, not here.">
     <span>Traffic:</span>
@@ -177,7 +178,7 @@ function renderState() {
 
 async function poll() {
   try {
-    info = await api("/api/state"); agents = info.agents; $("appVersion").textContent = "AI-Agents " + (info.version || "");
+    info = await api("/api/state"); agents = info.agents; $("appVersion").textContent = info.version ? "v" + String(info.version).replace(/^v/, "") : "";
     const hasGemini = (info.gemini_models || []).length > 0;
     const b = $("backend"); if (hasGemini && b.options.length === 1) { const o = el("option", null, "Gemini (cloud)"); o.value = "gemini"; b.appendChild(o); }
     if (!$("model").options.length || $("model").options[0].value === "") fillModels();
@@ -247,6 +248,5 @@ $("clear").onclick = () => $("log").replaceChildren();
 
 poll(); setInterval(poll, 3000);
 </script>
-<div id="appVersion" style="position:fixed;left:10px;bottom:6px;font-size:.7rem;color:var(--muted);pointer-events:none"></div>
 </body>
 </html>
