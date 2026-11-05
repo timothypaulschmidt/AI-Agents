@@ -37,9 +37,26 @@ spec:
               value: qwen3:8b
             - name: MCP_SERVER_URL
               value: http://mcp-server:8000/mcp
-            # FortiAIGate addresses go here (or in an overlay) once FortiAIGate is configured:
-            #   FAIG_OLLAMA_BASE_URL  FAIG_GEMINI_BASE_URL  FAIG_MCP_SERVER_URL
-            # Until they are set, the Traffic route stays Direct.
+            # FortiAIGate (the "Traffic" switch on the page). Same values as the Assistant's overlays.
+            # The gateway is HTTPS with a self-signed certificate for now, hence FAIG_VERIFY_TLS=false;
+            # set it to true once a trusted certificate is installed.
+            - name: FAIG_OLLAMA_BASE_URL
+              value: https://llm-gateway.fortiaigate:8080/ai/openai
+            - name: FAIG_GEMINI_BASE_URL
+              value: https://llm-gateway.fortiaigate:8080/ai/openai/v1
+            # plain name (page, Direct) = FortiAIGate's name for the model (provider slug + model)
+            - name: FAIG_MODEL_MAP
+              value: "qwen3:8b=ollama-qwen3-8b,qwen3:4b=ollama-qwen3-4b,llama3.2:3b=ollama-llama3.2-3b,gemini-3.6-flash=google-gemini-3.6-flash,gemini-3.5-flash-lite=google-gemini-3.5-flash-lite,gemini-3.5-flash=google-gemini-3.5-flash,gemini-robotics-er-2-preview=google-gemini-robotics-er-2-preview"
+            - name: FAIG_VERIFY_TLS
+              value: "false"
+            # The MCP route (FAIG_MCP_SERVER_URL) is added in a later step.
+            # Until the key below exists the Traffic route stays Direct.
+            - name: FAIG_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: faig-api-key
+                  key: FAIG_API_KEY
+                  optional: true
             # Idle wait between queue checks: the "slow loop" that keeps the CPU free.
             - name: POLL_SECONDS
               value: "60"

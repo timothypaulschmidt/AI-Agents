@@ -80,11 +80,14 @@ class OpenAICompatProvider:
         chat_url: str,
         model: str,
         api_key: str = "",
+        wire_model: str = "",
     ):
         self.name = name
         self.client = client
         self.chat_url = chat_url
         self.model = model
+        # The name sent in the request when it differs from the name shown (a gateway renames models)
+        self.wire_model = wire_model or model
         self.api_key = api_key
         # Ask for token counts. If a server rejects the option, it is switched
         # off once and the request retried, so chat never breaks over it.
@@ -109,7 +112,7 @@ class OpenAICompatProvider:
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
-        payload = {"model": self.model, "messages": messages, "stream": True}
+        payload = {"model": self.wire_model, "messages": messages, "stream": True}
         if self.include_usage:
             payload["stream_options"] = {"include_usage": True}
         if tools:

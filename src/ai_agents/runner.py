@@ -62,10 +62,13 @@ def _assistant_message(text: str, calls: list[ToolCall]) -> dict:
 class AgentRunner:
     def __init__(self, agent: Agent, settings: Settings, client: httpx.AsyncClient,
                  get_route: Callable[[], str] = lambda: "direct",
-                 tools_factory: Callable[[str], Any] | None = None):
+                 tools_factory: Callable[[str], Any] | None = None,
+                 faig_client: httpx.AsyncClient | None = None):
         self.agent = agent
         self.settings = settings
         self.client = client
+        # Used for traffic that goes through FortiAIGate (may accept its self-signed lab certificate)
+        self.faig_client = faig_client or client
         self.get_route = get_route
         # Tests replace this to talk to an in-process MCP server.
         self._tools_factory = tools_factory or self._connect_http
@@ -153,16 +156,20 @@ class AgentRunner:
 
     def _provider(self, route: str) -> OpenAICompatProvider:
         ep = self.settings.endpoints(route)
+        st = self.settings
+        client = self.faig_client if ep.gateway else self.client
+        wire = st.wire_name(route, self.config.model)
         if self.config.backend == "gemini":
             if not ep.gemini_base_url:
                 raise ProviderError("Gemini has no FortiAIGate address on this route (FAIG_GEMINI_BASE_URL is empty). "
                                    "Use a local model, or switch Traffic back to Direct.")
-            return OpenAICompatProvider("gemini", self.client,
+            return OpenAICompatProvider("gemini", client,
                                         ep.gemini_base_url.rstrip("/") + "/chat/completions",
-                                        self.config.model, self.settings.gemini_api_key)
-        return OpenAICompatProvider("ollama", self.client,
+                                        self.config.model,
+                                        st.faig_api_key if ep.gateway else st.gemini_api_key, wire)
+        return OpenAICompatProvider("ollama", client,
                                     ep.ollama_base_url.rstrip("/") + "/v1/chat/completions",
-                                    self.config.model)
+                                    self.config.model, st.faig_api_key if ep.gateway else "", wire)
 
     async def _main(self) -> None:
         try:

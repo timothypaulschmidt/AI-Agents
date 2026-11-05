@@ -66,7 +66,7 @@ def test_faig_routes_are_refused_until_configured():
 
 
 def test_model_only_route_needs_just_the_model_address():
-    c, _ = make_client(settings(faig_ollama_base_url="http://faig/ollama"))
+    c, _ = make_client(settings(faig_ollama_base_url="http://faig/ollama", faig_api_key="k"))
     with c:
         assert c.post("/api/route", json={"route": "faig_model"}).json()["route"] == "faig_model"
         st = c.get("/api/state").json()["route"]
@@ -76,7 +76,7 @@ def test_model_only_route_needs_just_the_model_address():
 
 
 def test_model_and_mcp_route():
-    c, _ = make_client(settings(faig_ollama_base_url="http://faig/ollama", faig_mcp_url="http://faig/mcp"))
+    c, _ = make_client(settings(faig_ollama_base_url="http://faig/ollama", faig_mcp_url="http://faig/mcp", faig_api_key="k"))
     with c:
         assert c.post("/api/route", json={"route": "faig_all"}).json()["route"] == "faig_all"
         assert c.post("/api/route", json={"route": "faig"}).json()["route"] == "faig_all"   # old name still works
@@ -157,3 +157,24 @@ def test_state_reports_the_release_version(monkeypatch):
     c, _ = make_client()
     with c:
         assert c.get("/api/state").json()["version"] == "dev"
+
+
+def test_gateway_route_needs_the_key():
+    c, _ = make_client(settings(faig_ollama_base_url="http://faig/ollama"))
+    with c:
+        r = c.post("/api/route", json={"route": "faig_model"})
+        assert r.status_code == 400 and "FAIG_API_KEY" in r.json()["detail"]
+
+
+def test_wire_names_and_gemini_choices():
+    from ai_agents.config import parse_model_map
+    m = parse_model_map("qwen3:8b=ollama-qwen3-8b,gemini-3.6-flash=google-gemini-3.6-flash,bad")
+    assert m == {"qwen3:8b": "ollama-qwen3-8b", "gemini-3.6-flash": "google-gemini-3.6-flash"}
+    st = settings(faig_ollama_base_url="http://faig/ai/openai", faig_gemini_base_url="http://faig/ai/openai/v1",
+                  faig_api_key="k", faig_model_map=m, gemini_api_key="g",
+                  gemini_models=("gemini-3.6-flash", "gemini-3.5-flash"))
+    assert st.wire_name("direct", "qwen3:8b") == "qwen3:8b"
+    assert st.wire_name("faig_model", "qwen3:8b") == "ollama-qwen3-8b"
+    assert st.gemini_choices("direct") == ["gemini-3.6-flash", "gemini-3.5-flash"]
+    assert st.gemini_choices("faig_model") == ["gemini-3.6-flash"]      # only mapped ones
+    assert st.endpoints("faig_model").gateway and not st.endpoints("direct").gateway

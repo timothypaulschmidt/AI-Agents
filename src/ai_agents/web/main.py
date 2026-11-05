@@ -56,10 +56,15 @@ def build_app(settings: Settings | None = None, client: httpx.AsyncClient | None
         http = client or httpx.AsyncClient(timeout=httpx.Timeout(st.request_timeout, connect=5.0))
         app.state.settings = st
         app.state.client = http
+        # FortiAIGate routes only: same settings, but may accept the gateway's self-signed lab certificate
+        faig_http = client or httpx.AsyncClient(timeout=httpx.Timeout(st.request_timeout, connect=5.0),
+                                                verify=st.faig_verify_tls)
+        app.state.faig_client = faig_http
         app.state.route = "direct"
         app.state.admin = AdminClient(st, http)
         app.state.runners = {
-            a.id: AgentRunner(a, st, http, get_route=lambda: app.state.route, tools_factory=tools_factory)
+            a.id: AgentRunner(a, st, http, get_route=lambda: app.state.route, tools_factory=tools_factory,
+                              faig_client=faig_http)
             for a in all_agents().values()
         }
         yield
@@ -67,6 +72,7 @@ def build_app(settings: Settings | None = None, client: httpx.AsyncClient | None
             await r.stop()
         if client is None:
             await http.aclose()
+            await faig_http.aclose()
 
     app = FastAPI(title="AI Agents", lifespan=lifespan)
 
@@ -78,10 +84,22 @@ def build_app(settings: Settings | None = None, client: httpx.AsyncClient | None
 
     async def ollama_models(request: Request) -> list[str] | None:
         st: Settings = request.app.state.settings
+        route = request.app.state.route
+        ep = st.endpoints(route)
         try:
+            if ep.gateway:
+                # The gateway lists every provider's models under its own names. Show plain names,
+                # and only the local ones (Gemini models are chosen separately).
+                resp = await request.app.state.faig_client.get(
+                    ep.ollama_base_url.rstrip("/") + "/v1/models",
+                    headers={"Authorization": f"Bearer {st.faig_api_key}"}, timeout=httpx.Timeout(3.0))
+                if resp.status_code == 200:
+                    back = {wire: plain for plain, wire in st.faig_model_map.items()}
+                    return [back[m["id"]] for m in resp.json().get("data", [])
+                            if m.get("id") in back and back[m["id"]] not in st.gemini_models]
+                return None
             resp = await request.app.state.client.get(
-                st.endpoints(request.app.state.route).ollama_base_url.rstrip("/") + "/api/tags",
-                timeout=httpx.Timeout(3.0))
+                ep.ollama_base_url.rstrip("/") + "/api/tags", timeout=httpx.Timeout(3.0))
             if resp.status_code == 200:
                 return [m.get("name", "") for m in resp.json().get("models", [])]
         except (httpx.HTTPError, ValueError):
@@ -107,7 +125,7 @@ def build_app(settings: Settings | None = None, client: httpx.AsyncClient | None
             "agents": [r.snapshot() for r in request.app.state.runners.values()],
             "ollama_models": await ollama_models(request),
             "default_ollama_model": st.ollama_model,
-            "gemini_models": list(st.gemini_models) if st.gemini_api_key else [],
+            "gemini_models": st.gemini_choices(request.app.state.route),
             "admin_enabled": bool(st.admin_token),
             "allow_parallel": st.allow_parallel,
         }
