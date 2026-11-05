@@ -118,13 +118,9 @@ def test_event_stream_replays_the_log():
     with c:
         c.post("/api/agents/helpdesk/start", json={"model": "fake", "poll_seconds": 30})
         assert wait_for(lambda: store.tickets[1]["status"] == "closed")
-        seen = []
-        with c.stream("GET", "/api/agents/helpdesk/events?after=0") as resp:
-            for line in resp.iter_lines():
-                if line.startswith("data:"):
-                    seen.append(json.loads(line[5:])["type"])
-                if "item_done" in seen:
-                    break
+        # once=1 replays the log and ends; the live stream never ends, which would hang the test client
+        text = c.get("/api/agents/helpdesk/events?after=0&once=1").text
+        seen = [json.loads(line[5:])["type"] for line in text.splitlines() if line.startswith("data:")]
         c.post("/api/agents/helpdesk/stop")
     assert "item_start" in seen and "tool_call" in seen and "item_done" in seen
 

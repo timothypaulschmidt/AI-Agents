@@ -107,7 +107,7 @@ async def test_stop_puts_the_claimed_ticket_back():
     def slow(messages, offered):
         return {"calls": [("get_ticket", {"ticket_id": 1})]}
 
-    runner, store, model, cfg = build(slow, Store(TICKETS[:1]), max_steps=50)
+    runner, store, model, cfg = build(slow, Store(TICKETS[:1]), max_steps=100000)   # never reaches the cap before stop()
     runner.start(cfg)
     for _ in range(100):
         await asyncio.sleep(0.02)

@@ -139,7 +139,12 @@ class AgentRunner:
         task = self._task
         if task is None or task.done():
             return
-        task.cancel()
+        # A cancel can be swallowed by code underneath (the MCP client does this when it is cancelled
+        # mid-call). The runner then carries on to its idle wait and never stops, and awaiting it
+        # would hang forever. So send the cancel again until the task has really ended.
+        while not task.done():
+            task.cancel()
+            await asyncio.wait({task}, timeout=0.5)
         try:
             await task
         except asyncio.CancelledError:
