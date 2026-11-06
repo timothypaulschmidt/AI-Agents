@@ -181,7 +181,8 @@ def build_app(settings: Settings | None = None, client: httpx.AsyncClient | None
         return {"ok": True}
 
     @app.get("/api/agents/{agent_id}/events")
-    async def events(agent_id: str, request: Request, after: int = 0):
+    async def events(agent_id: str, request: Request, after: int = 0, once: bool = False):
+        # once=1: send what is already in the log and finish (no live tail). Handy with curl and in tests.
         runner = runner_for(request, agent_id)
 
         async def gen():
@@ -192,6 +193,8 @@ def build_app(settings: Settings | None = None, client: httpx.AsyncClient | None
                     if e["seq"] > last:
                         last = e["seq"]
                         yield f"data: {json.dumps(e)}\n\n"
+                if once:
+                    return
                 while True:
                     try:
                         e = await asyncio.wait_for(q.get(), 15)
