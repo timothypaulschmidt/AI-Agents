@@ -46,7 +46,7 @@ spec:
               value: https://llm-gateway.fortiaigate:8080/ai/openai/v1
             # plain name (page, Direct) = FortiAIGate's name for the model (provider slug + model)
             - name: FAIG_MODEL_MAP
-              value: "qwen3:8b=ollama-qwen3-8b,qwen3:4b=ollama-qwen3-4b,llama3.2:3b=ollama-llama3.2-3b,gemini-3.6-flash=google-gemini-3.6-flash,gemini-3.5-flash-lite=google-gemini-3.5-flash-lite,gemini-3.5-flash=google-gemini-3.5-flash,gemini-robotics-er-2-preview=google-gemini-robotics-er-2-preview"
+              value: "qwen3:8b=ollama-qwen3-8b,llama3.2:3b=ollama-llama3.2-3b,gemini-3.6-flash=google-gemini-3.6-flash,gemini-3.5-flash-lite=google-gemini-3.5-flash-lite,gemini-3.5-flash=google-gemini-3.5-flash,gemini-robotics-er-2-preview=google-gemini-robotics-er-2-preview"
             - name: FAIG_VERIFY_TLS
               value: "false"
             # The MCP route (FAIG_MCP_SERVER_URL) is added in a later step.
